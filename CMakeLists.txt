@@ -38,7 +38,7 @@ message(STATUS "Proto File directory: ${PROTO_DIR}")
 
 # Get necessary packages.
 find_package(absl REQUIRED)
-find_package(Protobuf REQUIRED)
+find_package(Protobuf REQUIRED CONFIG)
 find_package(yaml-cpp REQUIRED)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 # Use pkg-config for hiredis due to this issue (https://github.com/coturn/coturn/issues/1618)
