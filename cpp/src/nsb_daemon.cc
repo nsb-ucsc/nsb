@@ -372,7 +372,7 @@ namespace nsb {
         // Check to see if source has been specified.
         if (incoming_msg->has_metadata()) {
             nsb::nsbm::Metadata in_metadata = incoming_msg->metadata();
-            if (in_metadata.has_src_id()) {
+            if (!in_metadata.src_id().empty()) {
                 // Search for the message in the buffer.
                 auto it = std::find_if(tx_buffer.begin(), tx_buffer.end(),
                           [&](const auto& msg) { return msg.source == in_metadata.src_id(); });
@@ -490,7 +490,7 @@ namespace nsb {
         // Check for destination.
         if (incoming_msg->has_metadata()) {
             nsb::nsbm::Metadata in_metadata = incoming_msg->metadata();
-            if (in_metadata.has_dest_id()) {
+            if (!in_metadata.dest_id().empty()) {
                 // Search for the message in the buffer.
                 auto it = std::find_if(rx_buffer.begin(), rx_buffer.end(),
                           [&](const auto& msg) { return msg.destination == in_metadata.dest_id(); });
