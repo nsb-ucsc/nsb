@@ -17,7 +17,6 @@
 #include <iomanip>
 #include <chrono>
 #include <cstdio>
-#include <format>
 #include <signal.h>
 #include <future>
 // Networking libraries.
