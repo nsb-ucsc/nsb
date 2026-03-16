@@ -1,8 +1,36 @@
-# pyproject.toml
 [build-system]
-requires = ["setuptools", "protobuf", "redis[hiredis]"]
+requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nsb_client"
+name = "nsb-client"
 version = "0.1.0"
+description = "Python client library for NSB – the Network Simulation Bridge"
+readme = "README.md"
+license = {text = "BSD-3-Clause"}
+requires-python = ">=3.7"
+authors = [
+    {name = "Inter-Networking Research Group, UC Santa Cruz"},
+]
+
+dependencies = [
+    "protobuf",
+    "redis[hiredis]",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+]
+
+[project.urls]
+Homepage = "https://github.com/nsb-ucsc/nsb_beta"
+Repository = "https://github.com/nsb-ucsc/nsb_beta"
+Issues = "https://github.com/nsb-ucsc/nsb_beta/issues"
+
+[tool.setuptools]
+py-modules = ["nsb_client"]
+
+[tool.setuptools.packages.find]
+include = ["proto*"]
