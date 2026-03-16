@@ -3,7 +3,7 @@
 1. Install system packages.
 2. Build & install **Abseil** (LTS 20240116.0, tests OFF).
 3. Build & install **Protobuf v27.5** (shared, PIC, uses Abseil).
-4. Clone NSB, replace top-level `CMakeLists.txt` (see below).
+4. Clone NSB.
 5. Configure, build, install NSB.
 6. Set `PYTHONPATH` for proto stubs.
 7. Start Redis on **port 5050**.
@@ -17,7 +17,7 @@
 - Build Abseil & Protobuf from source
 - NSB repo lives at: `~/nsb_beta`
 - Python output path (adjust if needed):  
-  `/users/$username$/nsb_beta/build/generated/python`
+  `~/nsb_beta/build/generated/python`
 
 ---
 
@@ -33,9 +33,9 @@ sudo apt install -y \
   libyaml-cpp-dev \
   libhiredis-dev \
   python3 \
+  python3-pip \
   redis-server \
   git
-   python3-pip
 ```
 ## 2. Build & Install Abseil (LTS 20240116.0)
 
@@ -94,7 +94,7 @@ cd nsb_beta
 #Optional: git checkout linux-nsb
 ```
 
-## 5.  Configure & Build NSB
+## 5. Configure & Build NSB
 ```bash
 rm -rf build && mkdir build && cd build
 cmake -DProtobuf_PROTOC_EXECUTABLE=/usr/local/bin/protoc ..
@@ -108,40 +108,46 @@ sudo cmake --install .
 sudo ldconfig
 ```
 Install locations:
-Lib: /usr/local/nsb/lib/libnsb.so
-Headers: /usr/local/nsb/include/...
-Binary: /usr/local/nsb/bin/nsb_daemon
-Python: /usr/local/nsb/bin/python_proto/
+- Lib: `/usr/local/nsb/lib/libnsb.so`
+- Headers: `/usr/local/nsb/include/...`
+- Binary: `/usr/local/nsb/bin/nsb_daemon`
+- Python: `/usr/local/nsb/bin/python_proto/`
 
-## 7 Set PYTHONPATH for Generated Python Proto
-```bash
-export PYTHONPATH=/users/nbhatia3/nsb_beta/build/generated/python:$PYTHONPATH
-```
-or ```bash
- cp -r build/generated/python/proto python/
+## 7. Set PYTHONPATH for Generated Python Proto
 
-#### To Persist
+You can either export the path to the generated proto files:
 ```bash
-echo 'export PYTHONPATH=/users/nbhatia3/nsb_beta/build/generated/python:$PYTHONPATH' >> ~/.bashrc
-source ~/.bashrc
+export PYTHONPATH=~/nsb_beta/build/generated/python:$PYTHONPATH
 ```
-or
+
+Or copy the generated proto files into the Python source directory:
 ```bash
 cp -r build/generated/python/proto python/
 ```
-#### Test:
+
+#### To Persist
+Add the export to your shell profile:
+```bash
+echo 'export PYTHONPATH=~/nsb_beta/build/generated/python:$PYTHONPATH' >> ~/.bashrc
+source ~/.bashrc
+```
+
+#### Test
 ```bash
 python3 - <<'EOF'
 import proto.nsb_pb2 as nsb_pb2
 print("NSB Python proto loaded from:", nsb_pb2.__file__)
 EOF
 ```
+
 ## 8. Start Redis on Port 5050
 ```bash
 redis-server --port 5050 --daemonize yes
 ```
-#### Verify: 
+#### Verify
+```bash
 redis-cli -p 5050 ping  # Should return: PONG
+```
 
 ## 9. Run NSB Daemon
 ```bash
