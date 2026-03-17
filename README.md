@@ -118,6 +118,10 @@ the project ```build``` directory (```xargs rm < install_manifest.txt```).
 
 Then, you may delete the ```build``` directory to remove the built project.
 
+#### Windows via WSL
+
+_Check the [WSL setup guide](wsl-setup-guide.md) for setting up NSB on Windows using WSL2 with Ubuntu._
+
 #### Windows via vcpkg
 _Coming soon._
 
