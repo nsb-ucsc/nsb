@@ -218,10 +218,10 @@ if (incoming_payload.exists()) {
     ...
 
     // You can access the payload properties.
-    std::cout << "Source: << incoming_payload.source\n" <<
-          "Destination: << incoming_payload.destination\n" <<
-          "Payload Size: << incoming_payload.payload_size\n" <<
-          "Payload: << incoming_payload.payload\n" << std::endl;
+    std::cout << "Source: " << incoming_payload.source << "\n"
+              << "Destination: " << incoming_payload.destination << "\n"
+              << "Payload Size: " << incoming_payload.payload_size << "\n"
+              << "Payload: " << incoming_payload.payload << std::endl;
 }
 ```
 
