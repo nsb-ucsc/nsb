@@ -81,8 +81,7 @@ ls /usr/local/lib/libprotobuf.so*
 echo "[4/7] Cloning NSB..."
 cd ~
 if [ ! -d "nsb" ]; then
-  #git clone https://github.com/nsb-ucsc/nsb_beta.git nsb # Update URL if needed
-  git clone -b test https://github.com/spencertjohnson/nsb.git nsb # Update URL if needed
+  git clone https://github.com/nsb-ucsc/nsb.git nsb
 fi
 cd nsb
 
