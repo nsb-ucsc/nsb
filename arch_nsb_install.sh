@@ -11,7 +11,7 @@ echo "=== NSB Installation Script (Arch Linux) ==="
 
 # ── 1. System Packages ──────────────────────────────────────────────────────
 echo "[1/7] Installing system packages..."
-sudo pacman -Sy --noconfirm \
+sudo pacman -Syu --noconfirm \
   base-devel \
   cmake \
   pkgconf \
@@ -82,7 +82,7 @@ echo "[4/7] Cloning NSB..."
 cd ~
 if [ ! -d "nsb" ]; then
   #git clone https://github.com/nsb-ucsc/nsb_beta.git nsb # Update URL if needed
-  git clone https://github.com/spencertjohnson/nsb.git nsb # Update URL if needed
+  git clone -b test https://github.com/spencertjohnson/nsb.git nsb # Update URL if needed
 fi
 cd nsb
 
