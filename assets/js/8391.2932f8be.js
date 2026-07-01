@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunk_workspace_nsb_website=globalThis.webpackChunk_workspace_nsb_website||[]).push([[8391],{8391(e,s,a){a.d(s,{createInfoServices:()=>b.v});var b=a(6491);a(1400)}}]);
