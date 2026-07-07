@@ -65,6 +65,9 @@ The following software packages are required to be installed:
 * **YAML parsing**, to parse configuration files
 * **hiredis**, to connect to the Redis server
 
+For Windows Installation here is the guide: https://docs.google.com/document/d/1lUPlt8ivUQ0rOnSiHTDb5ILzm9qF1JDygjT15hSg99Q/edit?tab=t.0
+
+
 Python API support involves additional package installation through its
 [_requirements.txt_](python/requirements.txt) file and is detailed in the 
 [Python README](python/README.md).
