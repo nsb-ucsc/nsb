@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunk_workspace_nsb_website||=[]).push([[7671],{7671(e,s,a){a.d(s,{createTreemapServices:()=>r.d});var r=a(4687);a(1400)}}]);

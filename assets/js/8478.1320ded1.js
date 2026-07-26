@@ -1,1 +1,0 @@
-"use strict";(globalThis.webpackChunk_workspace_nsb_website=globalThis.webpackChunk_workspace_nsb_website||[]).push([[8478],{8478(e,s,a){a.d(s,{createWardleyServices:()=>b.J});var b=a(1318);a(1400)}}]);
