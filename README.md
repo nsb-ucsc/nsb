@@ -143,7 +143,7 @@ _Coming soon._
 
 #### Linux
 
-_Check the [Linux-specific instructions](linux-setup-guide.md)._
+_Check the [Linux-specific instructions](./linux-setup-guide.md)._
 
 ## Basic Usage
 
