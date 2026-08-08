@@ -15,21 +15,33 @@
 - [Additional Documentation via Doxygen](#additional-documentation-via-doxygen)
 
 ## Adding the Client Module
-_Installable Python package coming soon._
 
-To access the client module, we recommend directly just copying the contents 
-of this directory to your Python project and use it as a module within your 
-project.
+### Install via pip (Recommended)
 
-If you want to install the package in development mode and want it to be 
-accessible to other project spaces, you can install it. From this directory:
+You can install the NSB Python client library in development mode from the
+`python/` directory. This will also install the required dependencies
+(`protobuf` and `redis`):
 ```bash
+cd python/
 pip install -e .
 ```
-Then, add the full path to this module to your PYTHONPATH, and add that to your
-_.zshrc_ or _.bashrc_ file.
+
+To also install development and testing dependencies:
+```bash
+pip install -e ".[dev]"
 ```
-echo 'export PYTHONPATH="${PYTHONPATH}:/.../nsb_beta/python"' >> ~/.zshrc
+
+### Manual Setup (Alternative)
+
+Alternatively, you can copy the contents of this directory to your Python
+project and use it as a module. Make sure to install the required dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+If needed, add the full path to this module to your `PYTHONPATH`:
+```
+echo 'export PYTHONPATH="${PYTHONPATH}:/.../nsb/python"' >> ~/.zshrc
 ```
 
 ## Basic API Usage
