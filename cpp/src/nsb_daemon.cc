@@ -158,6 +158,12 @@ namespace nsb {
                         LOG(ERROR) << "Accept failed." << std::endl;
                         continue;
                     }
+                    // Set accepted socket to non-blocking to prevent recv() from
+                    // hanging when no more data is available in the read loop.
+                    int ch_flags = fcntl(channel_fd, F_GETFL, 0);
+                    if (ch_flags != -1) {
+                        fcntl(channel_fd, F_SETFL, ch_flags | O_NONBLOCK);
+                    }
                     char client_ip[INET_ADDRSTRLEN];
                     inet_ntop(AF_INET, &(client_addr.sin_addr), client_ip, INET_ADDRSTRLEN);
                     int client_port = ntohs(client_addr.sin_port);
