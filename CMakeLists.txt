@@ -4,7 +4,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_options(-Wall -Wextra -Werror -Wpedantic -Wuninitialized)
 
-
 # Project information.
 project(nsb
     VERSION 0.1.0
@@ -72,15 +71,53 @@ message(STATUS "▸ Source: ${CMAKE_SOURCE_DIR}")
 message(STATUS "▸ Protobuf: ${Protobuf_INCLUDE_DIRS}")
 message(STATUS "▸ YAML: ${YAML_CPP_INCLUDE_DIR}")
 
-# Set up library.
+message(STATUS "Protoc Executable: ${Protobuf_PROTOC_EXECUTABLE}")
+
+# Generate C++ protobuf files directly via protoc.
+add_custom_command(
+    OUTPUT ${CPP_PROTO_DIR}/nsb.pb.h ${CPP_PROTO_DIR}/nsb.pb.cc
+    COMMAND ${Protobuf_PROTOC_EXECUTABLE}
+        --cpp_out=${CPP_PROTO_DIR}
+        --proto_path=${PROTO_DIR}
+        ${PROTO_DIR}/nsb.proto
+    DEPENDS ${PROTO_DIR}/nsb.proto
+    COMMENT "Running cpp protocol buffer compiler on nsb.proto"
+)
+
+# Generate Python protobuf files directly via protoc.
+add_custom_command(
+    OUTPUT ${PYTHON_DIR}/proto/nsb_pb2.py
+    COMMAND ${Protobuf_PROTOC_EXECUTABLE}
+        --python_out=${PYTHON_DIR}/proto
+        --proto_path=${PROTO_DIR}
+        ${PROTO_DIR}/nsb.proto
+    DEPENDS ${PROTO_DIR}/nsb.proto
+    COMMENT "Running python protocol buffer compiler on nsb.proto"
+)
+
+# Custom target that depends on all generated proto files.
+add_custom_target(nsb_proto_gen ALL
+    DEPENDS
+        ${CPP_PROTO_DIR}/nsb.pb.h
+        ${CPP_PROTO_DIR}/nsb.pb.cc
+        ${PYTHON_DIR}/proto/nsb_pb2.py
+)
+
+# Set up library (include generated nsb.pb.cc as an explicit source).
 add_library(nsb SHARED
     ${CPP_SRC_DIR}/nsb.cc
     ${CPP_SRC_DIR}/nsb_client.cc
+    ${CPP_PROTO_DIR}/nsb.pb.cc
 )
+
+# Ensure proto files are generated before compiling nsb.
+add_dependencies(nsb nsb_proto_gen)
+
 # Link libraries.
 target_link_libraries(nsb PUBLIC
     ${link_targets}
 )
+
 # Include directories.
 target_include_directories(nsb PUBLIC
     ${CPP_INCLUDE_DIR}
@@ -89,23 +126,6 @@ target_include_directories(nsb PUBLIC
     ${YAML_CPP_INCLUDE_DIR}
 )
 
-message(STATUS "Protoc Executable: ${Protobuf_PROTOC_EXECUTABLE}")
-# Generate C++ protobuf files.
-protobuf_generate(
-    TARGET nsb
-    LANGUAGE cpp
-    IMPORT_DIRS ${PROTO_DIR}
-    PROTOC_OUT_DIR ${CPP_DIR}/proto
-    PROTOS ${PROTO_DIR}/nsb.proto
-)
-# Generate Python protobuf file.
-protobuf_generate(
-    TARGET nsb
-    LANGUAGE python
-    IMPORT_DIRS ${PROTO_DIR}
-    PROTOC_OUT_DIR ${PYTHON_DIR}/proto
-    PROTOS ${PROTO_DIR}/nsb.proto
-)
 # Cleaning up.
 set_target_properties(nsb PROPERTIES ADDITIONAL_CLEAN_FILES
     "${CPP_DIR}/proto/*;${PYTHON_DIR}/proto/*;${PYTHON_DIR}/__pycache__/*"

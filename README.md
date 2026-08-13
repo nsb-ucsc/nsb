@@ -344,7 +344,7 @@ your code. Once this is complete, we recommend taking these steps in order:
 1. **Start the Redis server.** Specify or take note of the port number that the
 server is running on and make sure your configuration file points to the address
 and port.
-```redis-server -p 5050```
+```redis-server --port 5050```
 
 2. **Start the NSB Daemon.** If you followed the build instructions in above, 
 then you can start the NSB Daemon executable from either the _build_ directory
