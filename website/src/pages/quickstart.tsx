@@ -395,29 +395,39 @@ database:
             </Step>
 
             {/* ── Step 3: Start Mock Simulator ── */}
-            <Step id="step-3" n={3} title="Start the Mock Simulator" desc="Open Terminal 2. This pre-built simulator fetches payloads from NSB and passes them straight through — no real network simulator needed.">
+            <Step id="step-3" n={3} title="Start the Mock Simulator" desc="Open Terminal 2. This mock simulator fetches payloads from NSB and passes them straight through — no real network simulator needed.">
               <LangTabs
                 python={
                   <>
                     <div className="qs2-file-label">simulator.py</div>
                     <CodeBlock lang="python" code={`import nsb_client as nsb
+import time
 
 # Connect to NSB as a simulator client
 sim = nsb.NSBSimClient("node0", "127.0.0.1", 65432)
+print("Mock simulator ready — waiting for messages...", flush=True)
 
-# Fetch the payload waiting to be simulated
-entry = sim.fetch()
-if entry:
-    src = entry.source
-    dst = entry.destination
-    payload = entry.payload
+while True:
+    entry = sim.fetch(timeout=1)
+    if entry:
+        src = entry.src_id
+        dst = entry.dest_id
+        payload = entry.payload
 
-    print(f"Simulating: {src} -> {dst}, payload: {payload}")
+        print(f"Simulating: {src} -> {dst}, payload: {payload}", flush=True)
 
-    # For this quickstart, pass straight through.
-    # In a real simulator, you would route via ns-3 or OMNeT++ here.
-    sim.post(src, dst, payload)
-    print("Posted payload as delivered")`} />
+        # For this quickstart, pass straight through.
+        # In a real simulator, you would route via ns-3 or OMNeT++ here.
+        sim.post(src, dst, payload)
+        print("Posted payload as delivered", flush=True)
+        break
+    time.sleep(0.1)`} />
+                    <div className="gs-callout gs-callout-info" style={{ marginBottom: '10px' }}>
+                      <IconAlert/>
+                      <span>
+                        <code>fetch(timeout=1)</code> checks for a message and returns immediately if none is available yet — it does not mean the simulator gives up after one second. The surrounding loop keeps checking until a message arrives, so you can start the application whenever you are ready.
+                      </span>
+                    </div>
                     <CodeBlock code={`python3 simulator.py`} />
                   </>
                 }
@@ -426,6 +436,8 @@ if entry:
                     <div className="qs2-file-label">sim_node.cpp</div>
                     <CodeBlock lang="cpp" code={`#include "nsb_client.h"
 #include <iostream>
+#include <thread>
+#include <chrono>
 
 int main() {
     std::string server = "127.0.0.1";
@@ -433,28 +445,43 @@ int main() {
 
     nsb::NSBSimClient sim("node0", server, port);
 
-    nsb::MessageEntry entry = sim.fetch();
-    if (entry.exists()) {
-        std::string src = entry.source;
-        std::string dst = entry.destination;
-        std::string payload = entry.payload_obj;
+    std::cout << "Mock simulator ready - waiting for messages...\\n";
 
-        std::cout << "Simulating: " << src << " -> " << dst << "\\n";
+    nsb::MessageEntry entry;
 
-        // Pass through (in a real sim, route via simulator here)
-        sim.post(src, dst, payload);
-        std::cout << "Posted as delivered\\n";
+    while (true) {
+        entry = sim.fetch(1);
+
+        if (entry.exists()) {
+            std::string src = entry.source;
+            std::string dst = entry.destination;
+            std::string payload = entry.payload_obj;
+
+            std::cout << "Simulating: " << src << " -> " << dst << "\\n";
+
+            // Pass through (in a real sim, route via simulator here)
+            sim.post(src, dst, payload);
+
+            std::cout << "Posted as delivered\\n";
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
+
     return 0;
 }`} />
-                    <CodeBlock code={`clang++ -std=c++17 $(pkg-config --cflags --libs nsb) sim_node.cpp -o sim_node
+                    <CodeBlock code={`g++ -std=c++17 sim_node.cpp \\
+  $(pkg-config --cflags --libs nsb) \\
+  -I/usr/local/nsb/include/proto \\
+  -o sim_node
 ./sim_node`} />
                   </>
                 }
               />
               <div className="gs-callout gs-callout-info">
                 <IconAlert/>
-                <span>Start the simulator <strong>before</strong> the application so it is ready to <code>fetch()</code> when messages arrive.</span>
+                <span>Start the simulator <strong>before</strong> the application so it is ready to <code>fetch()</code> when messages arrive. Once the daemon and simulator are running, you can start the application whenever you are ready — there is no need to launch it immediately.</span>
               </div>
             </Step>
 
@@ -470,17 +497,19 @@ import time
 # Connect to NSB as an application client
 app = nsb.NSBAppClient("node0", "127.0.0.1", 65432)
 
-# Send a payload to "node1"
-app.send("node1", b"Hello from node0!")
+# Send a payload through the mock simulator
+app.send("node0", b"Hello from node0!")
 print("Sent payload")
 
 # Poll for a response
-time.sleep(1)
-entry = app.receive()
-if entry:
-    print(f"Received: {entry.payload} from {entry.source}")
-else:
-    print("No message received")`} />
+print("Waiting for response...", flush=True)
+
+while True:
+    entry = app.receive()
+    if entry:
+        print(f"Received: {entry.payload} from {entry.src_id}", flush=True)
+        break
+    time.sleep(0.1)`} />
                     <CodeBlock code={`python3 app.py`} />
                   </>
                 }
@@ -490,6 +519,7 @@ else:
                     <CodeBlock lang="cpp" code={`#include "nsb_client.h"
 #include <iostream>
 #include <thread>
+#include <chrono>
 
 int main() {
     std::string server = "127.0.0.1";
@@ -497,9 +527,9 @@ int main() {
 
     nsb::NSBAppClient app("node0", server, port);
 
-    // Send a payload
+    // Send a payload through the mock simulator
     std::string payload = "Hello from node0!";
-    app.send("node1", payload);
+    app.send("node0", payload);
     std::cout << "Sent payload\\n";
 
     // Wait and receive
@@ -511,29 +541,57 @@ int main() {
     }
     return 0;
 }`} />
-                    <CodeBlock code={`clang++ -std=c++17 $(pkg-config --cflags --libs nsb) app_node.cpp -o app_node
+                    <CodeBlock code={`g++ -std=c++17 app_node.cpp \\
+  $(pkg-config --cflags --libs nsb) \\
+  -I/usr/local/nsb/include/proto \\
+  -o app_node
 ./app_node`} />
                   </>
                 }
               />
 
               {/* Terminal order reminder */}
-              <div className="qs2-terminals">
-                <div className="qs2-terminals-label">Run in this order:</div>
-                <div className="qs2-terminals-grid">
-                  <div className="qs2-terminal-box">
-                    <div className="qs2-terminal-num">Terminal 1</div>
-                    <CodeBlock code={`./build/nsb_daemon config.yaml`} />
+              <div style={{ marginTop: '20px' }}>
+              <LangTabs
+                python={
+                  <div className="qs2-terminals" style={{ marginTop: 0 }}>
+                    <div className="qs2-terminals-label">Run in this order:</div>
+                    <div className="qs2-terminals-grid">
+                      <div className="qs2-terminal-box">
+                        <div className="qs2-terminal-num">Terminal 1</div>
+                        <CodeBlock code={`./build/nsb_daemon config.yaml`} />
+                      </div>
+                      <div className="qs2-terminal-box">
+                        <div className="qs2-terminal-num">Terminal 2</div>
+                        <CodeBlock code={`python3 simulator.py`} />
+                      </div>
+                      <div className="qs2-terminal-box">
+                        <div className="qs2-terminal-num">Terminal 3</div>
+                        <CodeBlock code={`python3 app.py`} />
+                      </div>
+                    </div>
                   </div>
-                  <div className="qs2-terminal-box">
-                    <div className="qs2-terminal-num">Terminal 2</div>
-                    <CodeBlock code={`python3 simulator.py`} />
+                }
+                cpp={
+                  <div className="qs2-terminals" style={{ marginTop: 0 }}>
+                    <div className="qs2-terminals-label">Run in this order:</div>
+                    <div className="qs2-terminals-grid">
+                      <div className="qs2-terminal-box">
+                        <div className="qs2-terminal-num">Terminal 1</div>
+                        <CodeBlock code={`./build/nsb_daemon config.yaml`} />
+                      </div>
+                      <div className="qs2-terminal-box">
+                        <div className="qs2-terminal-num">Terminal 2</div>
+                        <CodeBlock code={`./sim_node`} />
+                      </div>
+                      <div className="qs2-terminal-box">
+                        <div className="qs2-terminal-num">Terminal 3</div>
+                        <CodeBlock code={`./app_node`} />
+                      </div>
+                    </div>
                   </div>
-                  <div className="qs2-terminal-box">
-                    <div className="qs2-terminal-num">Terminal 3</div>
-                    <CodeBlock code={`python3 app.py`} />
-                  </div>
-                </div>
+                }
+              />
               </div>
             </Step>
 
@@ -549,18 +607,38 @@ int main() {
                 </div>
               </div>
 
-              <div className="qs2-outputs">
-                <div className="qs2-output-col">
-                  <div className="qs2-output-label">Terminal 2 (Simulator)</div>
-                  <CodeBlock lang="text" code={`Simulating: node0 -> node1, payload: b'Hello from node0!'
+              <LangTabs
+                python={
+                  <div className="qs2-outputs">
+                    <div className="qs2-output-col">
+                      <div className="qs2-output-label">Terminal 2 (Simulator)</div>
+                      <CodeBlock lang="text" code={`Mock simulator ready — waiting for messages...
+Simulating: node0 -> node0, payload: b'Hello from node0!'
 Posted payload as delivered`} />
-                </div>
-                <div className="qs2-output-col">
-                  <div className="qs2-output-label">Terminal 3 (Application)</div>
-                  <CodeBlock lang="text" code={`Sent payload
+                    </div>
+                    <div className="qs2-output-col">
+                      <div className="qs2-output-label">Terminal 3 (Application)</div>
+                      <CodeBlock lang="text" code={`Sent payload
+Waiting for response...
 Received: b'Hello from node0!' from node0`} />
-                </div>
-              </div>
+                    </div>
+                  </div>
+                }
+                cpp={
+                  <div className="qs2-outputs">
+                    <div className="qs2-output-col">
+                      <div className="qs2-output-label">Terminal 2 (Simulator)</div>
+                      <CodeBlock lang="text" code={`Simulating: node0 -> node0
+Posted as delivered`} />
+                    </div>
+                    <div className="qs2-output-col">
+                      <div className="qs2-output-label">Terminal 3 (Application)</div>
+                      <CodeBlock lang="text" code={`Sent payload
+Received: Hello from node0! from node0`} />
+                    </div>
+                  </div>
+                }
+              />
 
               <div className="gs-success-card">
                 <div className="gs-success-row">
@@ -584,6 +662,14 @@ Received: b'Hello from node0!' from node0`} />
 
             {/* ── Step 5: Two-Node Example ── */}
             <Step id="step-5" n={5} title="Two-Node Example (Python)" desc="A complete round-trip where node0 sends to node1, and node1 replies back. This shows the full Per-Node simulator mode in action." last>
+
+              <div className="gs-callout gs-callout-info" style={{ marginBottom: '20px' }}>
+                <IconAlert/>
+                <div>
+                  <strong>Node 1 waits for you.</strong> Node 1 waits for an incoming message instead of exiting when no message is immediately available. This means you can start Node 1 first and start Node 0 later — you do not need to coordinate their startup timing.
+                </div>
+              </div>
+
               <div className="qs2-file-label">app_node0.py</div>
               <CodeBlock lang="python" code={`import nsb_client as nsb
 import time
@@ -592,21 +678,31 @@ app = nsb.NSBAppClient("node0", "127.0.0.1", 65432)
 app.send("node1", b"Hello, node1!")
 print("[node0] Sent message")
 
-time.sleep(2)
-entry = app.receive()
-if entry:
-    print(f"[node0] Received reply: {entry.payload}")`} />
+print("[node0] Waiting for reply...", flush=True)
+
+while True:
+    entry = app.receive()
+    if entry:
+        print(f"[node0] Received reply: {entry.payload}", flush=True)
+        break
+    time.sleep(0.1)`} />
 
               <div className="qs2-file-label">app_node1.py</div>
               <CodeBlock lang="python" code={`import nsb_client as nsb
 import time
 
 app = nsb.NSBAppClient("node1", "127.0.0.1", 65432)
-time.sleep(1)
-entry = app.receive()
-if entry:
-    print(f"[node1] Received: {entry.payload}")
-    app.send(entry.source, b"Hello back, node0!")`} />
+
+print("[node1] Waiting for message...", flush=True)
+
+while True:
+    entry = app.receive()
+    if entry:
+        print(f"[node1] Received: {entry.payload}", flush=True)
+        app.send(entry.src_id, b"Hello back, node0!")
+        print("[node1] Sent reply", flush=True)
+        break
+    time.sleep(0.1)`} />
 
               <div className="qs2-file-label">simulator.py — Per-Node, handles both nodes</div>
               <CodeBlock lang="python" code={`import nsb_client as nsb
@@ -615,15 +711,83 @@ import time
 sim0 = nsb.NSBSimClient("node0", "127.0.0.1", 65432)
 sim1 = nsb.NSBSimClient("node1", "127.0.0.1", 65432)
 
-for _ in range(2):
-    for sim in [sim0, sim1]:
-        entry = sim.fetch(timeout=0)  # non-blocking poll
-        if entry:
-            print(f"[sim] Routing {entry.source} -> {entry.destination}")
-            time.sleep(0.1)           # simulate 100ms network delay
-            sim.post(entry.source, entry.destination, entry.payload)
+simulators = [sim0, sim1]
+messages_processed = 0
 
-time.sleep(3)`} />
+print("[sim] Mock simulator ready — waiting for messages...", flush=True)
+
+while messages_processed < 2:
+    for sim in simulators:
+        entry = sim.fetch(timeout=0)
+        if entry:
+            print(f"[sim] Routing {entry.src_id} -> {entry.dest_id}")
+            time.sleep(0.1)
+            sim.post(entry.src_id, entry.dest_id, entry.payload)
+            messages_processed += 1
+
+    time.sleep(0.1)`} />
+
+              <div className="qs2-terminals" style={{ marginTop: '24px' }}>
+                <div className="qs2-terminals-label">Run the example — use four terminals:</div>
+                <div className="gs-callout gs-callout-info" style={{ marginBottom: '16px' }}>
+                  <IconAlert/>
+                  <span>
+                    Start the daemon first, then the simulator. You can start Node 1 before Node 0.
+                    Node 1 waits for its incoming message, so you do not need to start Node 0 immediately.
+                  </span>
+                </div>
+                <div className="qs2-terminals-grid" style={{ marginTop: '24px' }}>
+                  <div className="qs2-terminal-box">
+                    <div className="qs2-terminal-num">Terminal 1 — NSB Daemon</div>
+                    <CodeBlock code={`./build/nsb_daemon config.yaml`} />
+                    <div className="gs-step-note">Wait for the daemon to report that it is listening.</div>
+                  </div>
+                  <div className="qs2-terminal-box">
+                    <div className="qs2-terminal-num">Terminal 2 — Per-Node Simulator</div>
+                    <CodeBlock code={`python3 simulator.py`} />
+                    <div className="gs-step-note">Wait for the simulator to print "Mock simulator ready".</div>
+                  </div>
+                  <div className="qs2-terminal-box">
+                    <div className="qs2-terminal-num">Terminal 3 — Node 1</div>
+                    <CodeBlock code={`python3 app_node1.py`} />
+                    <div className="gs-step-note">Node 1 prints "[node1] Waiting for message..." and stays alive. Take your time before starting Node 0.</div>
+                  </div>
+                  <div className="qs2-terminal-box">
+                    <div className="qs2-terminal-num">Terminal 4 — Node 0</div>
+                    <CodeBlock code={`python3 app_node0.py`} />
+                    <div className="gs-step-note">Start Node 0 whenever you are ready. It sends to Node 1, triggering the full round-trip.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '28px' }}>
+                <div className="qs2-terminals-label">Expected output:</div>
+                <div className="gs-callout gs-callout-info" style={{ marginBottom: '16px' }}>
+                  <IconAlert/>
+                  <span>NSB itself may print additional <code>INFO</code> or <code>WARNING</code> log lines. The lines below are the important application-level output — your terminals will not be limited to only these lines.</span>
+                </div>
+                <div className="qs2-outputs">
+                  <div className="qs2-output-col">
+                    <div className="qs2-output-label">Terminal 2 (Simulator)</div>
+                    <CodeBlock lang="text" code={`[sim] Mock simulator ready — waiting for messages...
+[sim] Routing node0 -> node1
+[sim] Routing node1 -> node0`} />
+                  </div>
+                  <div className="qs2-output-col">
+                    <div className="qs2-output-label">Terminal 3 (Node 1)</div>
+                    <CodeBlock lang="text" code={`[node1] Waiting for message...
+[node1] Received: b'Hello, node1!'
+[node1] Sent reply`} />
+                  </div>
+                  <div className="qs2-output-col">
+                    <div className="qs2-output-label">Terminal 4 (Node 0)</div>
+                    <CodeBlock lang="text" code={`[node0] Sent message
+[node0] Waiting for reply...
+[node0] Received reply: b'Hello back, node0!'`} />
+                  </div>
+                </div>
+              </div>
+
             </Step>
 
           </div>{/* end gs-platform-main */}
@@ -655,7 +819,7 @@ time.sleep(3)`} />
                 <IconCheckCircle/> Prerequisites
               </div>
               <ul className="gs-sidebar-list">
-                {['NSB installed & verified','Python 3.7+ or C++17','config.yaml ready','3 terminal windows'].map(item => (
+                {['NSB installed & verified','Python 3.7+ or C++17','config.yaml ready','3 terminals (4 for the two-node example)'].map(item => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>
@@ -683,7 +847,7 @@ time.sleep(3)`} />
                 <Link className="gs-sidebar-link" to="/docs/configuration/config-reference">
                   <IconSettings/> Configuration Reference <IconArrowRight/>
                 </Link>
-                <Link className="gs-sidebar-link" to="docs/api-reference/python/overview">
+                <Link className="gs-sidebar-link" to="/docs/api-reference/python/overview">
                   <IconBook/> API Documentation <IconArrowRight/>
                 </Link>
                 <Link className="gs-sidebar-link" to="/tutorials">

@@ -27,34 +27,54 @@ import nsb_client as nsb
 import time
 
 sim = nsb.NSBSimClient("node0", "127.0.0.1", 65432)
+print("Mock simulator ready — waiting for messages...", flush=True)
 
-entry = sim.fetch()
-if entry:
-    src = entry.source
-    dst = entry.destination
-    payload = entry.payload
+while True:
+    entry = sim.fetch(timeout=1)
+    if entry:
+        src = entry.src_id
+        dst = entry.dest_id
+        payload = entry.payload
 
-    print(f"Simulating: {src} -> {dst}, payload: {payload}")
+        print(f"Simulating: {src} -> {dst}, payload: {payload}", flush=True)
 
-    time.sleep(0.1)   # <-- new: simulate 100ms of "network" delay
+        time.sleep(0.1)   # <-- new: simulate 100ms of "network" delay
 
-    sim.post(src, dst, payload)
-    print("Posted payload as delivered")
+        sim.post(src, dst, payload)
+        print("Posted payload as delivered", flush=True)
+        break
+    time.sleep(0.1)
 ```
 
-Run the Quickstart sequence again (daemon → simulator → application). The application still receives the message — it just takes slightly longer. This `time.sleep()` call is literally how every example in this documentation simulates network latency until you plug in a real simulator like ns-3 or OMNeT++.
+Run the Quickstart sequence again (daemon → simulator → application). The application still receives the message — it just takes slightly longer. This delay simply simulates network latency in the mock simulator used for this tutorial. In a real integration, the simulator would determine when a message is delivered.
 
 
 ## 2. Observe the Difference in Receive Timing
 
-In `app.py`, the application calls `time.sleep(1)` before `receive()`. Try lowering it:
+The Quickstart `app.py` polls for a response in a loop:
 
 ```python
-time.sleep(0.05)   # was: time.sleep(1)
-entry = app.receive()
+while True:
+    entry = app.receive()
+    if entry:
+        print(f"Received: {entry.payload} from {entry.src_id}", flush=True)
+        break
+    time.sleep(0.1)
 ```
 
-If you set this lower than the simulator's delay (`0.1` from Step 1), the application may poll too early and get `None` back. Try a few values and watch what changes. This is the same race condition any PULL-mode integration has to account for — the receiver only sees a message if it asks *after* the simulator has posted it.
+The `time.sleep(0.1)` between polls means the application checks roughly 10 times per second. Try changing the polling interval and observe the effect:
+
+```python
+time.sleep(0.5)   # check twice per second — noticeable lag before the reply appears
+```
+
+or:
+
+```python
+time.sleep(0.05)  # check 20 times per second — snappier response
+```
+
+In either case the application keeps looping until a message arrives — it will not miss the message. In PULL mode, the application actively checks for delivered messages. The polling interval affects how quickly the application notices that a message has arrived. Shorter intervals are generally more responsive, while longer intervals reduce the number of polling requests.
 
 
 ## 3. Change the Payload Size
@@ -62,11 +82,12 @@ If you set this lower than the simulator's delay (`0.1` from Step 1), the applic
 Send a much larger payload and see that nothing about the flow changes:
 
 ```python
-app.send("node1", b"x" * 5000)   # 5000 bytes instead of a short string
+app.send("node0", b"x" * 5000)   # 5000 bytes instead of a short string
 ```
 
 With `use_db: false` (the Quickstart default), this larger payload is sent directly — no extra setup needed. If you switch to `use_db: true`, NSB caches the payload in Redis and routes only a short key through the bridge instead, regardless of size. See [Redis Storage](/docs/backends/redis-storage) for why this matters at scale.
 
+---
 
 ## 4. Switch from PULL to PUSH Mode
 
@@ -77,7 +98,7 @@ system:
   mode: 1   # was: mode: 0  (PULL → PUSH)
 ```
 
-Restart the daemon, simulator, and application. In PUSH mode, the daemon forwards payloads to clients automatically instead of waiting to be asked — you may notice the message arrives with less code-level polling on the application side. For the full mechanics of why this happens, see [System Modes](/docs/architecture/system-modes).
+Switch the configuration to PUSH mode and restart the daemon and clients. In PUSH mode, the daemon forwards payloads to clients automatically instead of waiting to be asked. The client behavior differs from the PULL-mode Quickstart, so consult the [System Modes](/docs/architecture/system-modes) documentation before adapting the example clients for PUSH mode.
 
 
 ## 5. Switch from Per-Node to System-Wide Simulator Mode
@@ -106,10 +127,14 @@ app = nsb.NSBAppClient("node0", "127.0.0.1", 65432)
 app.send("node1", b"Hello, node1!")
 print("[node0] Sent message")
 
-time.sleep(2)
-entry = app.receive()
-if entry:
-    print(f"[node0] Received reply: {entry.payload}")
+print("[node0] Waiting for reply...", flush=True)
+
+while True:
+    entry = app.receive()
+    if entry:
+        print(f"[node0] Received reply: {entry.payload}", flush=True)
+        break
+    time.sleep(0.1)
 ```
 
 ### `app_node1.py`
@@ -119,11 +144,17 @@ import nsb_client as nsb
 import time
 
 app = nsb.NSBAppClient("node1", "127.0.0.1", 65432)
-time.sleep(1)
-entry = app.receive()
-if entry:
-    print(f"[node1] Received: {entry.payload}")
-    app.send(entry.source, b"Hello back, node0!")
+
+print("[node1] Waiting for message...", flush=True)
+
+while True:
+    entry = app.receive()
+    if entry:
+        print(f"[node1] Received: {entry.payload}", flush=True)
+        app.send(entry.src_id, b"Hello back, node0!")
+        print("[node1] Sent reply", flush=True)
+        break
+    time.sleep(0.1)
 ```
 
 ### `simulator.py` — Per-Node, handles both nodes
@@ -135,36 +166,101 @@ import time
 sim0 = nsb.NSBSimClient("node0", "127.0.0.1", 65432)
 sim1 = nsb.NSBSimClient("node1", "127.0.0.1", 65432)
 
-for _ in range(2):
-    for sim in [sim0, sim1]:
-        entry = sim.fetch(timeout=0)  # non-blocking poll
-        if entry:
-            print(f"[sim] Routing {entry.source} -> {entry.destination}")
-            time.sleep(0.1)  # simulate 100ms network delay
-            sim.post(entry.source, entry.destination, entry.payload)
+simulators = [sim0, sim1]
+messages_processed = 0
 
-time.sleep(3)
+print("[sim] Mock simulator ready — waiting for messages...", flush=True)
+
+while messages_processed < 2:
+    for sim in simulators:
+        entry = sim.fetch(timeout=0)
+        if entry:
+            print(f"[sim] Routing {entry.src_id} -> {entry.dest_id}")
+            time.sleep(0.1)  # simulate 100ms network delay
+            sim.post(entry.src_id, entry.dest_id, entry.payload)
+            messages_processed += 1
+
+    time.sleep(0.1)
 ```
 
-Run all three (daemon already running from earlier):
+Unlike earlier one-shot examples, both the simulator and applications continue polling until messages arrive. This means you do not need to launch every process within a narrow timing window.
+
+Start `app_node1.py` before `app_node0.py`. Node 1 waits indefinitely for a message, so you can leave it running and start Node 0 whenever you're ready. This avoids the startup timing issues that can occur with one-shot receive examples.
+
+Use four terminals (the daemon from earlier stays running):
 
 ```bash
-python3 simulator.py     # Terminal 1
-python3 app_node1.py      # Terminal 2 — start before node0 sends
-python3 app_node0.py      # Terminal 3
+# Terminal 1 — NSB Daemon (already running from earlier)
+./build/nsb_daemon config.yaml
 ```
+
+```bash
+# Terminal 2 — Per-Node Simulator
+python3 simulator.py
+```
+
+Wait for the simulator to print `[sim] Mock simulator ready — waiting for messages...` before continuing.
+
+```bash
+# Terminal 3 — Node 1
+python3 app_node1.py
+```
+
+Node 1 prints `[node1] Waiting for message...` and stays alive. **Take your time** — you do not need to start Node 0 immediately.
+
+```bash
+# Terminal 4 — Node 0
+python3 app_node0.py
+```
+
+Start Node 0 whenever you are ready. It sends to Node 1 and triggers the full round-trip.
 
 
 ## 7. Observe the `[sim] Routing` Output
 
-Watch the simulator terminal. You'll see two lines like:
+> **Note:** NSB itself may print additional `INFO` or `WARNING` log lines in each terminal. The lines below are the important application-level output — focus on these rather than the NSB internals.
+
+Watch the simulator terminal. You'll see output like:
 
 ```
+[sim] Mock simulator ready — waiting for messages...
 [sim] Routing node0 -> node1
 [sim] Routing node1 -> node0
 ```
 
-This is the simulator polling **both** `sim0` and `sim1` in a loop and routing whichever message is currently waiting. Each `NSBSimClient` only ever sees messages addressed to its own identifier — that's the Per-Node identifier-matching rule in action, not a coincidence of this example's code.
+Node 1's terminal:
+
+```
+[node1] Waiting for message...
+[node1] Received: b'Hello, node1!'
+[node1] Sent reply
+```
+
+Node 0's terminal:
+
+```
+[node0] Sent message
+[node0] Waiting for reply...
+[node0] Received reply: b'Hello back, node0!'
+```
+
+This is the simulator polling **both** `sim0` and `sim1` in a loop and routing whichever message is currently available. In Per-Node mode, each `NSBSimClient` is associated with its own node identifier, and the daemon routes fetch requests according to that simulator identity.
+
+Node 1's terminal:
+
+```text
+[node1] Waiting for message...
+[node1] Received: b'Hello, node1!'
+[node1] Sent reply
+```
+
+Node 0's terminal:
+
+```text
+[node0] Sent message
+[node0] Waiting for reply...
+[node0] Received reply: b'Hello back, node0!'
+```
 
 
 ## What You Just Learned

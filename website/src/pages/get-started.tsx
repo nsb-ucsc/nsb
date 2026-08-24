@@ -468,11 +468,25 @@ echo 'export PYTHONPATH="\${PYTHONPATH}:/.../nsb/python"' >> ~/.zshrc`} />
                     <Step
                       n={5}
                       title="Verify Installation"
-                      desc="Confirm the daemon binary and Python proto bindings both load correctly."
+                      desc="Start the daemon with a valid configuration file to confirm the installation works correctly."
                       last
                     >
-                      <CodeBlock code={`/[your/install/path]/nsb/bin/nsb_daemon --help`} />
-                      <div className="gs-step-note">Test the Python proto bindings:</div>
+                      <div className="gs-step-note">
+                        The NSB daemon expects a configuration file path as its argument. Starting it
+                        successfully with a valid <code>config.yaml</code> is the correct way to verify
+                        the daemon installation.
+                      </div>
+                      <CodeBlock code={`/[your/install/path]/nsb/bin/nsb_daemon config.yaml`} />
+                      <div className="gs-callout gs-callout-success">
+                        <IconCheckCircle/>
+                        <span>
+                          Expected: the daemon loads the configuration and reports that it is listening.
+                          You should see output similar to:
+                        </span>
+                      </div>
+                      <CodeBlock lang="text" code={`[...] (info) Starting daemon...
+[...] (info) Server started on port 65432`} />
+                      <div className="gs-step-note" style={{ marginTop: '16px' }}>Test the Python proto bindings:</div>
                       <CodeBlock lang="python" code={`python3 - <<'EOF'
 import proto.nsb_pb2 as nsb_pb2
 print("NSB Python proto loaded from:", nsb_pb2.__file__)
@@ -638,11 +652,25 @@ source ~/.bashrc`} />
                     <Step
                       n={6}
                       title="Verify Installation"
-                      desc="Confirm the daemon binary and Python proto bindings both load correctly."
+                      desc="Start the daemon with a valid configuration file to confirm the installation works correctly."
                       last
                     >
-                      <CodeBlock code={`/usr/local/nsb/bin/nsb_daemon --help`} />
-                      <div className="gs-step-note">Test the Python proto bindings:</div>
+                      <div className="gs-step-note">
+                        The NSB daemon expects a configuration file path as its argument. Starting it
+                        successfully with a valid <code>config.yaml</code> is the correct way to verify
+                        the daemon installation.
+                      </div>
+                      <CodeBlock code={`/usr/local/nsb/bin/nsb_daemon config.yaml`} />
+                      <div className="gs-callout gs-callout-success">
+                        <IconCheckCircle/>
+                        <span>
+                          Expected: the daemon loads the configuration and reports that it is listening.
+                          You should see output similar to:
+                        </span>
+                      </div>
+                      <CodeBlock lang="text" code={`[...] (info) Starting daemon...
+[...] (info) Server started on port 65432`} />
+                      <div className="gs-step-note" style={{ marginTop: '16px' }}>Test the Python proto bindings:</div>
                       <CodeBlock lang="python" code={`python3 - <<'EOF'
 import proto.nsb_pb2 as nsb_pb2
 print("NSB Python proto loaded from:", nsb_pb2.__file__)
@@ -813,7 +841,7 @@ EOF`} />
             </div>
             <div className="gs-success-row">
               <div className="gs-success-icon"><IconCheckCircle/></div>
-              <div className="gs-success-text">Verification passed — Python proto loads</div>
+              <div className="gs-success-text">Verification passed — daemon starts and Python proto loads</div>
             </div>
           </div>
         </div>

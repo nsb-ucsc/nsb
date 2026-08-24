@@ -33,7 +33,7 @@ import nsb_client as nsb
 sim = nsb.NSBSimClient("node0", "127.0.0.1", 65432)
 ```
 
-The identifier (`"node0"` here) matters most in **Per-Node** mode, where it must exactly match the corresponding `NSBAppClient`'s identifier. In **System-Wide** mode, you'd typically use a single shared identifier like `"global_sim"` since only one `NSBSimClient` connects at all. See [Simulator Modes](/docs/architecture/simulator-modes) if you haven't already.
+The identifier (`"node0"` here) is especially important in **Per-Node** mode, where the simulator is associated with a specific node identifier. In **System-Wide** mode, a single simulator client can handle messages across nodes. See [Simulator Modes](/docs/architecture/simulator-modes) if you haven't already.
 
 
 ## Step 2 — Poll with `fetch()`
@@ -61,8 +61,8 @@ Use blocking (`timeout=None`, the default) for a simple single-purpose simulator
 ```python
 entry = sim.fetch()
 if entry:
-    print("Source:      ", entry.source)
-    print("Destination: ", entry.destination)
+    print("Source:      ", entry.src_id)
+    print("Destination: ", entry.dest_id)
     print("Payload:     ", entry.payload)
     print("Payload size:", entry.payload_size)
 ```
@@ -75,10 +75,10 @@ Always check `if entry:` before accessing its fields — a `None` result just me
 Once you've "routed" the payload through your simulated network — even if that routing is just a `time.sleep()` for now — call `post()` to hand it back to NSB for delivery:
 
 ```python
-sim.post(entry.source, entry.destination, entry.payload)
+sim.post(entry.src_id, entry.dest_id, entry.payload)
 ```
 
-This is what makes the payload available to `NSBAppClient(entry.destination).receive()` on the other side. Until `post()` is called, the application never sees the message — `fetch()` alone doesn't deliver anything.
+This is what makes the payload available to `NSBAppClient(entry.dest_id).receive()` on the other side. Until `post()` is called, the application never sees the message — `fetch()` alone doesn't deliver anything.
 
 
 ## Step 5 — Build a Simple Loop
@@ -95,7 +95,7 @@ while True:
     entry = sim.fetch(timeout=0)
     if entry:
         time.sleep(0.1)  # stand-in for real network delay
-        sim.post(entry.source, entry.destination, entry.payload)
+        sim.post(entry.src_id, entry.dest_id, entry.payload)
     else:
         time.sleep(0.05)  # small pause to avoid a busy loop
 ```
@@ -117,11 +117,11 @@ print("[mock-sim] Connected. Waiting for messages...")
 while True:
     entry = sim.fetch(timeout=0)
     if entry:
-        print(f"[mock-sim] Fetched: {entry.source} -> {entry.destination} "
+        print(f"[mock-sim] Fetched: {entry.src_id} -> {entry.dest_id} "
               f"({entry.payload_size} bytes)")
         time.sleep(0.1)
-        sim.post(entry.source, entry.destination, entry.payload)
-        print(f"[mock-sim] Posted: {entry.source} -> {entry.destination}")
+        sim.post(entry.src_id, entry.dest_id, entry.payload)
+        print(f"[mock-sim] Posted: {entry.src_id} -> {entry.dest_id}")
     else:
         time.sleep(0.05)
 ```
@@ -140,11 +140,11 @@ print("[mock-sim] Connected. Waiting for messages...")
 while True:
     entry = sim.fetch(timeout=0)
     if entry:
-        print(f"[mock-sim] Fetched: {entry.source} -> {entry.destination} "
+        print(f"[mock-sim] Fetched: {entry.src_id} -> {entry.dest_id} "
               f"({entry.payload_size} bytes)")
         time.sleep(0.1)
-        sim.post(entry.source, entry.destination, entry.payload)
-        print(f"[mock-sim] Posted: {entry.source} -> {entry.destination}")
+        sim.post(entry.src_id, entry.dest_id, entry.payload)
+        print(f"[mock-sim] Posted: {entry.src_id} -> {entry.dest_id}")
     else:
         time.sleep(0.05)
 ```
@@ -156,7 +156,7 @@ Run it alongside the daemon and an application client exactly as you did in the 
 
 - What a simulator client's two responsibilities are (fetch, post)
 - Blocking vs. non-blocking `fetch()` and when to use each
-- How to read every field on a `MessageEntry`
+- How to read the source, destination, payload, and payload size from a `MessageEntry`
 - Why `post()` — not `fetch()` — is what actually delivers a message
 - How to structure a continuous polling loop without burning CPU
 - Why logging every fetch/post pair makes a simulator debuggable

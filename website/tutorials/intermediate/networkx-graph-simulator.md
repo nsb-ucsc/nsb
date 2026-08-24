@@ -24,12 +24,12 @@ NetworkX requires no build system and no external dependencies — it's a good f
 
 ## Step 1 — Define a Graph Topology
 
-NetworkX gives you several built-in topology generators. For a simple line of 3 nodes:
+NetworkX gives you several built-in topology generators. For a simple line of 3 nodes using the same identifiers as your NSB clients:
 
 ```python
 import networkx as nx
 
-G = nx.path_graph(3)  # nodes: 0 -- 1 -- 2
+G = nx.path_graph(["node0", "node1", "node2"])  # node0 -- node1 -- node2
 ```
 
 You can also build a topology manually:
@@ -40,21 +40,22 @@ G.add_edge("node0", "node1")
 G.add_edge("node1", "node2")
 ```
 
-Either approach gives you a graph object you can query for paths between any two nodes.
+Either approach gives you a graph with nodes named `"node0"`, `"node1"`, and `"node2"` — the same identifiers your `NSBAppClient` and `NSBSimClient` instances use.
 
 
 ## Step 2 — Look Up Source and Destination as Graph Nodes
 
-When your simulator fetches a payload, the `MessageEntry`'s `source` and `destination` are strings (e.g. `"node0"`, `"node2"`). These need to correspond to node identifiers in your graph:
+When your simulator fetches a payload, `MessageEntry.src_id` and `MessageEntry.dest_id` are the string identifiers of the sending and receiving nodes — for example `"node0"` and `"node2"`. Because the graph uses the same identifiers, you can look them up directly:
 
 ```python
 entry = sim.fetch()
 if entry:
-    src = entry.source
-    dst = entry.destination
+    src = entry.src_id
+    dst = entry.dest_id
+    payload = entry.payload
 ```
 
-If you used `nx.path_graph(3)`, your nodes are named `0`, `1`, `2` — make sure your application clients use matching identifiers, or map between the two naming schemes yourself.
+These are the values you'll pass to NetworkX to find a path through the topology.
 
 
 ## Step 3 — Find the Shortest Path
@@ -63,18 +64,24 @@ If you used `nx.path_graph(3)`, your nodes are named `0`, `1`, `2` — make sure
 path = nx.shortest_path(G, src, dst)
 ```
 
-`nx.shortest_path()` returns the list of nodes the payload would traverse — for a 3-node line graph, sending from node `0` to node `2` returns `[0, 1, 2]`, a path of 2 hops.
+`nx.shortest_path()` returns the list of nodes the payload would traverse. For the 3-node line graph, routing from `"node0"` to `"node2"` returns:
+
+```python
+["node0", "node1", "node2"]
+```
+
+That's 3 nodes and 2 hops (one per graph edge).
 
 
 ## Step 4 — Calculate Delay from Path Length
 
-Treat each hop as adding a fixed amount of latency:
+Treat each hop (graph edge) as adding a fixed amount of latency:
 
 ```python
-delay = len(path) * 0.02  # 20ms per hop
+delay = (len(path) - 1) * 0.02  # 20ms per hop
 ```
 
-A 2-hop path costs `3 * 0.02 = 0.06` seconds (since `len(path)` counts nodes, not edges — adjust this formula if you want strict per-edge timing instead).
+`len(path)` counts nodes, so subtract 1 to get the number of edges (hops). A 2-hop path costs `2 * 0.02 = 0.04` seconds.
 
 
 ## Step 5 — Apply the Delay
@@ -87,49 +94,125 @@ time.sleep(delay)
 
 This is the same mechanism every tutorial so far has used — the only difference now is that the delay value comes from actual topology instead of a hardcoded constant.
 
----
 
 ## Step 6 — Post the Payload
 
 ```python
-sim.post(entry.source, entry.destination, entry.payload)
+sim.post(src, dst, payload)
 ```
 
 Exactly the same `post()` call as the mock simulator from the previous tutorial — NSB doesn't know or care that the delay this time came from a graph traversal.
 
 
+## Prerequisites
+
+Before starting this tutorial, ensure you have:
+
+- Completed the [Get Started](/get-started) guide and have NSB installed
+- The NSB daemon running with the correct configuration
+- NetworkX installed (see above)
+
+**Required daemon configuration:**
+
+The daemon must be configured in PUSH mode without Redis for this tutorial to work as shown. Your `config.yaml` should have:
+
+```yaml
+system:
+  mode: 1  # PUSH mode
+
+database:
+  use_db: false  # Disable Redis
+```
+
+Start the daemon with:
+```bash
+/usr/local/nsb/bin/nsb_daemon config.yaml
+```
+
+
 ## Full Working Code — 3-Node Example
 
+This simulator uses blocking `fetch()` — it waits until a message arrives before processing it. This is appropriate here because we have a single simulator client. The previous tutorial used `fetch(timeout=0)` because it needed to poll multiple simulator clients without blocking on any one of them.
+
+**simulator.py:**
 ```python
 import time
 import networkx as nx
 from nsb_client import NSBSimClient
 
 # Define a simple 3-node network topology
-G = nx.path_graph(3)  # nodes: 0 -- 1 -- 2
+G = nx.path_graph(["node0", "node1", "node2"])  # node0 -- node1 -- node2
 
 sim = NSBSimClient("node0", "127.0.0.1", 65432)
 
+print("[networkx-sim] Connected. Waiting for messages...", flush=True)
+
 while True:
     entry = sim.fetch()
+
     if entry:
-        src, dst = 0, 2
+        src = entry.src_id
+        dst = entry.dest_id
+        payload = entry.payload
+
+        # Guard against identifiers not present in the topology
+        if src not in G or dst not in G:
+            print(
+                f"[networkx-sim] No route in topology for {src} -> {dst}",
+                flush=True
+            )
+            continue
+
         path = nx.shortest_path(G, src, dst)
-        delay = len(path) * 0.02  # 20ms per hop
+        delay = (len(path) - 1) * 0.02  # 20ms per hop
+
+        print(
+            f"[networkx-sim] Routing {src} -> {dst} "
+            f"via {path} ({delay:.2f}s delay)",
+            flush=True
+        )
+
         time.sleep(delay)
-        sim.post(entry.source, entry.destination, entry.payload)
+
+        sim.post(src, dst, payload)
+
+        print(
+            f"[networkx-sim] Delivered {src} -> {dst}",
+            flush=True
+        )
 ```
 
+**app.py (to test the simulator):**
+```python
+import nsb_client as nsb
+import time
+
+app = nsb.NSBAppClient("node0", "127.0.0.1", 65432)
+app.send("node0", b"Hello from node0!")
+print("[app] Sent message", flush=True)
+print("[app] Waiting for reply...", flush=True)
+
+while True:
+    entry = app.receive()
+    if entry:
+        print(f"[app] Received: {entry.payload} from {entry.src_id}", flush=True)
+        break
+    time.sleep(0.1)
+```
+
+**Note:** Since the simulator is initialized as `"node0"`, the app sends to `"node0"` so the simulator will fetch and process the message.
+
 :::tip Extending This
-Try adding more nodes with `nx.path_graph(10)`, or use `nx.random_geometric_graph()` for a more realistic, irregular topology. As long as you can look up a path with `nx.shortest_path()`, the delay calculation and `post()` call stay the same.
+Try adding more nodes with `nx.path_graph(["node0", "node1", "node2", "node3", "node4"])`, or use `nx.random_geometric_graph()` for a more realistic, irregular topology. As long as you can look up a path with `nx.shortest_path()`, the delay calculation and `post()` call stay the same.
 :::
 
 
 ## What You Just Learned
 
-- How to define and query a graph topology with NetworkX
-- How to map `MessageEntry.source`/`destination` onto graph nodes
-- How to compute a path-length-based delay instead of a flat constant
+- How to define a graph topology using the same node identifiers as your NSB clients
+- How to use `MessageEntry.src_id` and `MessageEntry.dest_id` to find a path through the graph
+- How to calculate delay from the number of hops (graph edges) rather than a flat constant
+- How to guard against message identifiers that are not present in the graph topology
 - That `post()` doesn't change regardless of how sophisticated your routing logic gets
 
 
