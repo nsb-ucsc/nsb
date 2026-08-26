@@ -1,4 +1,7 @@
 # pyproject.toml
+[tool.setuptools]
+py-modules = ["nsb_client"]
+
 [build-system]
 requires = ["setuptools", "protobuf", "redis[hiredis]"]
 build-backend = "setuptools.build_meta"
