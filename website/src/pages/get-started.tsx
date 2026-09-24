@@ -412,13 +412,16 @@ cmake --build . --parallel`} />
                       <div className="gs-expected">
                         <div className="gs-expected-label">Expected output</div>
                         <CodeBlock lang="text" code={`[cmake] -- Checking target libraries:
-[cmake] -- ✓ Found target: yaml-cpp::yaml-cpp
 [cmake] -- ✓ Found target: protobuf::libprotobuf
+[cmake] -- ✓ Found target: yaml-cpp::yaml-cpp
+[cmake] -- ✓ Found target: SQLite::SQLite3
 [cmake] -- ✓ Found target: absl::base
 [cmake] -- ✓ Found target: absl::log
-[cmake] -- ✓ Found target: absl::time
-[cmake] -- ✓ Found target: absl::log_internal_check_op
 [cmake] -- ✓ Found target: absl::log_initialize
+[cmake] -- ✓ Found target: absl::log_internal_check_op
+[cmake] -- ✓ Found target: absl::raw_logging_internal
+[cmake] -- ✓ Found target: absl::strings
+[cmake] -- ✓ Found target: absl::time
 [cmake] -- ✓ Found target: PkgConfig::hiredis`} />
                       </div>
                     </Step>
@@ -546,7 +549,7 @@ cmake .. \\
   -DCMAKE_BUILD_TYPE=Release \\
   -DABSL_ENABLE_INSTALL=ON \\
   -DBUILD_TESTING=OFF
-cmake --build . --parallel
+cmake --build . --parallel "$(nproc)"
 sudo cmake --install .
 sudo ldconfig`} />
                       <div className="gs-step-note">Sanity check:</div>
@@ -571,7 +574,7 @@ cmake .. \\
   -Dprotobuf_ABSL_PROVIDER=package \\
   -DCMAKE_CXX_STANDARD=17 \\
   -DCMAKE_INSTALL_PREFIX=/usr/local
-cmake --build . --parallel
+cmake --build . --parallel "$(nproc)"
 sudo cmake --install .
 sudo ldconfig`} />
                       <div className="gs-step-note">Sanity check:</div>
@@ -583,25 +586,26 @@ ls /usr/local/lib/libprotobuf.so*`} />
                     <Step
                       n={4}
                       title="Build & Install NSB"
-                      desc="Clone the repository and build with the Linux-specific CMake config."
+                      desc="Clone the repository and build with CMake."
                     >
                       <CodeBlock code={`git clone https://github.com/nsb-ucsc/nsb_beta.git
 cd nsb_beta
-# Linux: use the Linux-specific CMakeLists
-cp LinuxCMakeLists.txt CMakeLists.txt
 mkdir build && cd build
 cmake -DProtobuf_PROTOC_EXECUTABLE=/usr/local/bin/protoc ..
-cmake --build . --parallel`} />
+cmake --build . --parallel "$(nproc)"`} />
                       <div className="gs-expected">
                         <div className="gs-expected-label">Expected output</div>
                         <CodeBlock lang="text" code={`[cmake] -- Checking target libraries:
-[cmake] -- ✓ Found target: yaml-cpp::yaml-cpp
 [cmake] -- ✓ Found target: protobuf::libprotobuf
+[cmake] -- ✓ Found target: yaml-cpp::yaml-cpp
+[cmake] -- ✓ Found target: SQLite::SQLite3
 [cmake] -- ✓ Found target: absl::base
 [cmake] -- ✓ Found target: absl::log
-[cmake] -- ✓ Found target: absl::time
-[cmake] -- ✓ Found target: absl::log_internal_check_op
 [cmake] -- ✓ Found target: absl::log_initialize
+[cmake] -- ✓ Found target: absl::log_internal_check_op
+[cmake] -- ✓ Found target: absl::raw_logging_internal
+[cmake] -- ✓ Found target: absl::strings
+[cmake] -- ✓ Found target: absl::time
 [cmake] -- ✓ Found target: PkgConfig::hiredis`} />
                       </div>
                       <div className="gs-step-note">Install (Linux requires sudo and ldconfig):</div>
@@ -625,28 +629,24 @@ sudo ldconfig`} />
                           <div className="gs-needs-pkg">NSB Daemon</div>
                           <div><code>/usr/local/nsb/bin/nsb_daemon</code></div>
                         </div>
-                        <div className="gs-needs-row">
-                          <div className="gs-needs-pkg">Python proto</div>
-                          <div><code>/usr/local/nsb/bin/python_proto/</code></div>
-                        </div>
                       </div>
                     </Step>
 
                     <Step
                       n={5}
                       title="Python Setup"
-                      desc="Install the Python client library and set the proto stub path."
+                      desc="Install the Python client library in development mode."
                     >
                       <CodeBlock code={`cd python/
 pip install -r requirements.txt
-pip install -e .`} />
-                      <div className="gs-step-note">Set the Python path for generated proto stubs:</div>
-                      <CodeBlock code={`export PYTHONPATH=/path/to/nsb_beta/build/generated/python:$PYTHONPATH
-# To persist:
-echo 'export PYTHONPATH=/path/to/nsb_beta/build/generated/python:$PYTHONPATH' >> ~/.bashrc
+pip install -e .
+echo 'export PYTHONPATH="\${PYTHONPATH}:/path/to/nsb_beta/python"' >> ~/.bashrc
 source ~/.bashrc`} />
-                      <div className="gs-step-note">Or copy the stubs directly:</div>
-                      <CodeBlock code={`cp -r build/generated/python/proto python/`} />
+                      <div className="gs-step-note">
+                        The Python protobuf bindings are not installed to <code>/usr/local/nsb</code>. The
+                        build generates them at <code>python/proto/nsb_pb2.py</code> in the repository, where
+                        the Python client imports them from, so keep the repository checkout in place.
+                      </div>
                     </Step>
 
                     <Step
@@ -677,7 +677,9 @@ print("NSB Python proto loaded from:", nsb_pb2.__file__)
 EOF`} />
                       <div className="gs-callout gs-callout-success">
                         <IconCheckCircle/>
-                        <span>Expected: prints the proto file path without error.</span>
+                        <span>
+                          Expected: prints <code>/path/to/nsb_beta/python/proto/nsb_pb2.py</code> without error.
+                        </span>
                       </div>
                     </Step>
                   </div>

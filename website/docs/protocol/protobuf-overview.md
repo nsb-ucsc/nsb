@@ -19,7 +19,7 @@ Every message that travels across NSB — INIT handshakes, SEND/FETCH/POST/RECEI
 
 Compiled outputs:
 - **C++:** `cpp/proto/nsb.pb.cc` and `nsb.pb.h`
-- **Python:** `python/proto/proto/nsb_pb2.py` (also in `rabbit/proto/`)
+- **Python:** `python/proto/nsb_pb2.py` (also in `rabbit/proto/`)
 
 For the complete schema with every field documented, see [Protobuf Schema](/docs/protocol/protobuf-schema).
 

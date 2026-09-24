@@ -1,62 +1,63 @@
-cmake_minimum_required(VERSION 3.10)
-# set(CMAKE_VERBOSE_MAKEFILE ON)
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-add_compile_options(-Wall -Wextra -Werror -Wpedantic -Wuninitialized)
+cmake_minimum_required(VERSION 3.16)
 
-
-# Project information.
+# ------------------------------------------------------------------
+# Project Information
+# ------------------------------------------------------------------
 project(nsb
-    VERSION 0.1.0
+    VERSION 1.1.0
     DESCRIPTION "NSB – Network Simulation Bridge"
     HOMEPAGE_URL "https://github.com/nsb-ucsc/nsb_beta"
     LANGUAGES CXX
 )
 
+# Set specifications.
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+option(NSB_WERROR "Treat compiler warnings in NSB sources as errors" ON)
 # Set standard install directories.
 include(GNUInstallDirs)
 
-# Make cpp/proto and python/proto directories.
-file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/cpp/proto)
-file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/python/proto)
-
-# Set directories as necessary.
+# ------------------------------------------------------------------
+# Source Directories
+# ------------------------------------------------------------------
+set(CPP_DIR          "${CMAKE_SOURCE_DIR}/cpp")
+set(CPP_SRC_DIR      "${CPP_DIR}/src")
+set(CPP_INCLUDE_DIR  "${CPP_DIR}/include")
+set(CPP_PROTO_DIR    "${CPP_DIR}/proto")
+set(PYTHON_DIR       "${CMAKE_SOURCE_DIR}/python")
+set(PYTHON_PROTO_DIR "${PYTHON_DIR}/proto")
+set(PROTO_DIR        "${CMAKE_SOURCE_DIR}/proto")
 message(STATUS "Source directory: ${CMAKE_SOURCE_DIR}")
 message(STATUS "Binary directory: ${CMAKE_BINARY_DIR}")
-set(CPP_DIR "${CMAKE_SOURCE_DIR}/cpp")
-set(CPP_SRC_DIR "${CPP_DIR}/src")
-set(CPP_INCLUDE_DIR "${CPP_DIR}/include")
-set(CPP_PROTO_DIR "${CPP_DIR}/proto")
-set(PYTHON_DIR "${CMAKE_SOURCE_DIR}/python")
-set(PROTO_DIR "${CMAKE_SOURCE_DIR}/proto")
-message(STATUS "C++ directory: ${CPP_DIR}")
-message(STATUS "▸ Source: ${CPP_SRC_DIR}")
-message(STATUS "▸ Headers: ${CPP_INCLUDE_DIR}")
-message(STATUS "▸ Proto: ${CPP_PROTO_DIR}")
-message(STATUS "Python directory: ${PYTHON_DIR}")
-message(STATUS "Proto File directory: ${PROTO_DIR}")
 
-# Get necessary packages.
-find_package(absl REQUIRED)
+# ------------------------------------------------------------------
+# Dependencies
+# ------------------------------------------------------------------
+# Find dependency packages.
 find_package(Protobuf REQUIRED)
+find_package(absl REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(SQLite3 REQUIRED)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 # Use pkg-config for hiredis due to this issue (https://github.com/coturn/coturn/issues/1618)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(hiredis REQUIRED IMPORTED_TARGET hiredis)
 
-# Verify that libraries have been found.
+# Verify that packages/libraries have been found.
 set(link_targets
-    yaml-cpp::yaml-cpp
     protobuf::libprotobuf
+    yaml-cpp::yaml-cpp
+    SQLite::SQLite3
     absl::base
     absl::log
-    absl::time
-    absl::log_internal_check_op
     absl::log_initialize
+    absl::log_internal_check_op
+    absl::raw_logging_internal
+    absl::strings
+    absl::time
     PkgConfig::hiredis
 )
-
 message(STATUS "Checking target libraries:")
 foreach(link_target ${link_targets})
     if(TARGET ${link_target})
@@ -65,124 +66,120 @@ foreach(link_target ${link_targets})
         message(STATUS "✗ Target not found: ${link_target}")
     endif()
 endforeach()
-message(STATUS "Protobuf Libraries: ${Protobuf_LIBRARIES}")
-# Verify that directories are found.
-message(STATUS "Directories to be included:")
-message(STATUS "▸ Source: ${CMAKE_SOURCE_DIR}")
-message(STATUS "▸ Protobuf: ${Protobuf_INCLUDE_DIRS}")
-message(STATUS "▸ YAML: ${YAML_CPP_INCLUDE_DIR}")
 
-# Set up library.
+# ------------------------------------------------------------------
+# Protobuf Code Generation (Python & C++)
+# ------------------------------------------------------------------
+# Identify protoc executable.
+if(Protobuf_PROTOC_EXECUTABLE)
+    set(NSB_PROTOC "${Protobuf_PROTOC_EXECUTABLE}")
+elseif(TARGET protobuf::protoc)
+    set(NSB_PROTOC "$<TARGET_FILE:protobuf::protoc>")
+else()
+    message(FATAL_ERROR "protoc not found; set -DProtobuf_PROTOC_EXECUTABLE=/path/to/protoc")
+endif()
+message(STATUS "Protoc Executable: ${NSB_PROTOC}")
+# Set protobuf sources.
+set(NSB_PROTO_CPP_SRC "${CPP_PROTO_DIR}/nsb.pb.cc")
+set(NSB_PROTO_CPP_HDR "${CPP_PROTO_DIR}/nsb.pb.h")
+set(NSB_PROTO_PY      "${PYTHON_PROTO_DIR}/nsb_pb2.py")
+# Create custom command to generate protobuf code.
+add_custom_command(
+    OUTPUT "${NSB_PROTO_CPP_SRC}" "${NSB_PROTO_CPP_HDR}" "${NSB_PROTO_PY}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CPP_PROTO_DIR}" "${PYTHON_PROTO_DIR}"
+    COMMAND "${NSB_PROTOC}"
+        --proto_path "${PROTO_DIR}"
+        --cpp_out "${CPP_PROTO_DIR}"
+        --python_out "${PYTHON_PROTO_DIR}"
+        "${PROTO_DIR}/nsb.proto"
+    DEPENDS "${PROTO_DIR}/nsb.proto"
+    COMMENT "Generating C++ and Python protobuf code from nsb.proto"
+    VERBATIM
+)
+# Generated code is not ours to lint.
+set_source_files_properties("${NSB_PROTO_CPP_SRC}" PROPERTIES COMPILE_OPTIONS "-w")
+# Warning flags applied to NSB's own sources.
+set(nsb_warning_flags -Wall -Wextra -Wpedantic -Wuninitialized)
+if(NSB_WERROR)
+    list(APPEND nsb_warning_flags -Werror)
+endif()
+# Protobuf headers use Clang nullability annotations.
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    list(APPEND nsb_warning_flags -Wno-nullability-extension)
+endif()
+
+# ------------------------------------------------------------------
+# NSB Library
+# ------------------------------------------------------------------
+# Add C++ sources.
 add_library(nsb SHARED
-    ${CPP_SRC_DIR}/nsb.cc
-    ${CPP_SRC_DIR}/nsb_client.cc
+    "${CPP_SRC_DIR}/nsb.cc"
+    "${CPP_SRC_DIR}/nsb_client.cc"
+    "${NSB_PROTO_CPP_SRC}"
 )
-# Link libraries.
-target_link_libraries(nsb PUBLIC
-    ${link_targets}
-)
-# Include directories.
 target_include_directories(nsb PUBLIC
-    ${CPP_INCLUDE_DIR}
-    ${CPP_PROTO_DIR}
-    ${Protobuf_INCLUDE_DIRS}
-    ${YAML_CPP_INCLUDE_DIR}
+    "${CPP_INCLUDE_DIR}"
+    "${CPP_PROTO_DIR}"
 )
+target_link_libraries(nsb PUBLIC ${link_targets})
+target_compile_options(nsb PRIVATE ${nsb_warning_flags})
 
-message(STATUS "Protoc Executable: ${Protobuf_PROTOC_EXECUTABLE}")
-# Generate C++ protobuf files.
-protobuf_generate(
-    TARGET nsb
-    LANGUAGE cpp
-    IMPORT_DIRS ${PROTO_DIR}
-    PROTOC_OUT_DIR ${CPP_DIR}/proto
-    PROTOS ${PROTO_DIR}/nsb.proto
+# Single owner of the protoc step (also builds the Python stubs); avoids building twice.
+add_custom_target(nsb_proto ALL
+    DEPENDS "${NSB_PROTO_CPP_SRC}" "${NSB_PROTO_CPP_HDR}" "${NSB_PROTO_PY}"
 )
-# Generate Python protobuf file.
-protobuf_generate(
-    TARGET nsb
-    LANGUAGE python
-    IMPORT_DIRS ${PROTO_DIR}
-    PROTOC_OUT_DIR ${PYTHON_DIR}/proto
-    PROTOS ${PROTO_DIR}/nsb.proto
-)
-# Cleaning up.
-set_target_properties(nsb PROPERTIES ADDITIONAL_CLEAN_FILES
-    "${CPP_DIR}/proto/*;${PYTHON_DIR}/proto/*;${PYTHON_DIR}/__pycache__/*"
-)
+add_dependencies(nsb nsb_proto)
 
-# Compile daemon executable.
-add_executable(nsb_daemon ${CPP_SRC_DIR}/nsb_daemon.cc)
-# Link NSB library.
-target_link_libraries(nsb_daemon PUBLIC nsb)
-# Include directories.
-target_include_directories(nsb_daemon PUBLIC 
-    ${CPP_INCLUDE_DIR}
-    ${CPP_PROTO_DIR}
-    ${Protobuf_INCLUDE_DIRS}
-    ${YAML_CPP_INCLUDE_DIR}
-)
+# ------------------------------------------------------------------
+# NSB Daemon Executable
+# ------------------------------------------------------------------
+add_executable(nsb_daemon "${CPP_SRC_DIR}/nsb_daemon.cc")
+target_link_libraries(nsb_daemon PRIVATE nsb)
+target_compile_options(nsb_daemon PRIVATE ${nsb_warning_flags})
 
-### INSTALLATION ###
+# ------------------------------------------------------------------
+# NSB Test Executable
+# ------------------------------------------------------------------
+add_executable(nsb_test "${CPP_DIR}/nsb_test.cc")
+target_link_libraries(nsb_test PRIVATE nsb)
+target_compile_options(nsb_test PRIVATE ${nsb_warning_flags})
 
-# Prepend "nsb" to install directories.
-set(NSB_INSTALL_LIBDIR "nsb/${CMAKE_INSTALL_LIBDIR}")
-set(NSB_INSTALL_BINDIR "nsb/${CMAKE_INSTALL_BINDIR}")
-set(NSB_INSTALL_INCLUDEDIR "nsb/${CMAKE_INSTALL_INCLUDEDIR}")
-
-# Set proper install name.
+# ------------------------------------------------------------------
+# Installation Layout (<prefix>/nsb/...)
+# ------------------------------------------------------------------
+set(NSB_INSTALL_LIBDIR      "nsb/${CMAKE_INSTALL_LIBDIR}")
+set(NSB_INSTALL_BINDIR      "nsb/${CMAKE_INSTALL_BINDIR}")
+set(NSB_INSTALL_INCLUDEDIR  "nsb/${CMAKE_INSTALL_INCLUDEDIR}")
+# Set proper install name (macOS).
 set_target_properties(nsb PROPERTIES
     INSTALL_NAME_DIR "${CMAKE_INSTALL_PREFIX}/${NSB_INSTALL_LIBDIR}"
 )
-
-# Generate pkg-config file.
+# Generate and install the pkg-config file.
 configure_file(
-    ${CMAKE_SOURCE_DIR}/nsb.pc.in
-    ${CMAKE_BINARY_DIR}/nsb.pc
+    "${CMAKE_SOURCE_DIR}/nsb.pc.in"
+    "${CMAKE_BINARY_DIR}/nsb.pc"
     @ONLY
 )
-
-# Install the pkg-config file.
-install(FILES ${CMAKE_BINARY_DIR}/nsb.pc
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+install(FILES "${CMAKE_BINARY_DIR}/nsb.pc"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
     COMPONENT development
 )
-
-# Install libraries and headers.
+# Install the daemon.
 install(TARGETS nsb nsb_daemon
     EXPORT nsbTargets
-    LIBRARY DESTINATION ${NSB_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${NSB_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${NSB_INSTALL_BINDIR}
-    INCLUDES DESTINATION ${NSB_INSTALL_INCLUDEDIR}
+    LIBRARY DESTINATION "${NSB_INSTALL_LIBDIR}"
+    ARCHIVE DESTINATION "${NSB_INSTALL_LIBDIR}"
+    RUNTIME DESTINATION "${NSB_INSTALL_BINDIR}"
+    INCLUDES DESTINATION "${NSB_INSTALL_INCLUDEDIR}"
     COMPONENT runtime
 )
-
-# Install your headers.
-install(DIRECTORY ${CPP_INCLUDE_DIR}/ ${CPP_PROTO_DIR}/
-    DESTINATION ${NSB_INSTALL_INCLUDEDIR}
+# Install development components.
+install(DIRECTORY "${CPP_INCLUDE_DIR}/"
+    DESTINATION "${NSB_INSTALL_INCLUDEDIR}"
     COMPONENT development
     FILES_MATCHING PATTERN "*.h"
 )
-
-### FOR TESTING ###
-
-# Compile nsb_test.
-add_executable(nsb_test ${CPP_DIR}/nsb_test.cc)
-target_link_libraries(nsb_test PUBLIC nsb)
-target_include_directories(nsb_test PUBLIC 
-    ${CPP_INCLUDE_DIR}
-    ${Protobuf_INCLUDE_DIRS}
-    ${YAML_CPP_INCLUDE_DIR}
+install(FILES "${NSB_PROTO_CPP_HDR}"
+    DESTINATION "${NSB_INSTALL_INCLUDEDIR}"
+    COMPONENT development
 )
-
-# Suppress Clang-specific nullability-extension warning which can be emitted
-# by protobuf-generated sources (these use Clang nullability annotations).
-# The project enables -Werror globally, so treat this as a safe, targeted
-# suppression for Clang/AppleClang only on the targets that build generated
-# protobuf code.
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
-    target_compile_options(nsb PRIVATE "-Wno-nullability-extension")
-    target_compile_options(nsb_daemon PRIVATE "-Wno-nullability-extension")
-    target_compile_options(nsb_test PRIVATE "-Wno-nullability-extension")
-endif()

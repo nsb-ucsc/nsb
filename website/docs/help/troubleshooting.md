@@ -66,15 +66,12 @@ See [Get Started](/get-started) for the full installation procedure.
 
 **Symptom:** `ModuleNotFoundError` or `ImportError` when running `import proto.nsb_pb2`.
 
-**Cause:** `PYTHONPATH` doesn't point at the generated proto stubs.
+**Cause:** The Python stubs haven't been generated yet, or `PYTHONPATH` doesn't include the `python/` directory.
 
-**Fix:**
+**Fix:** Build NSB with CMake, which generates `python/proto/nsb_pb2.py`, then make sure `python/` is on your `PYTHONPATH`:
 ```bash
-export PYTHONPATH=/path/to/nsb_beta/build/generated/python:$PYTHONPATH
-```
-On Linux you can also copy the stubs directly:
-```bash
-cp -r build/generated/python/proto python/
+ls python/proto/nsb_pb2.py
+export PYTHONPATH=/path/to/nsb_beta/python:$PYTHONPATH
 ```
 See [Configuration Reference](/docs/configuration/config-reference) and [Python API Overview](/docs/api-reference/python/overview) for setup details.
 
