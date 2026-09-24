@@ -12,8 +12,7 @@ A complete reference of all files and directories in the NSB repository.
 
 ```
 nsb/
-├── CMakeLists.txt              # Main build configuration
-├── LinuxCMakeLists.txt         # Linux-specific build configuration
+├── CMakeLists.txt              # Build configuration (Linux and macOS)
 ├── config.yaml                 # Default NSB system configuration
 ├── minconfig.yaml              # Minimal configuration for quick testing
 ├── nsb.pc.in                   # pkg-config template file
@@ -37,9 +36,9 @@ proto/
 └── nsb.proto                   # NSB message definitions (nsbm type)
 ```
 
-The compiled output is placed in:
+The compiled output is generated at build time into:
 - `cpp/proto/nsb.pb.cc` and `nsb.pb.h` — C++ generated code
-- `python/proto/proto/nsb_pb2.py` — Python generated code
+- `python/proto/nsb_pb2.py` — Python generated code
 
 See [Protobuf Schema](/docs/protocol/protobuf-schema) for the full message definition.
 
@@ -226,8 +225,8 @@ After running `cmake --build`:
 |---|---|---|
 | `nsb_daemon` | `build/` | NSB Daemon executable |
 | `libnsb.so` / `libnsb.dylib` | `build/` → `[install]/nsb/lib/` | Shared client library |
-| `nsb.pb.cc` / `nsb.pb.h` | `build/generated/` | Compiled Protobuf bindings |
-| `nsb_pb2.py` | `build/generated/python/proto/` | Python Protobuf bindings |
+| `nsb.pb.cc` / `nsb.pb.h` | `cpp/proto/` | Compiled Protobuf bindings |
+| `nsb_pb2.py` | `python/proto/` (not installed) | Python Protobuf bindings |
 | `libnsb_rabbitmq_cpp.a` | `cpp/rabbit/build/` | RabbitMQ C++ static library |
 | `libnsb_unified_cpp.a` | `cpp/rabbit/build/` | Unified C++ static library |
 

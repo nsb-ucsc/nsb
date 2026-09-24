@@ -1,0 +1,112 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'website/**'
+  pull_request:
+    paths-ignore:
+      - 'website/**'
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    env:
+      ABSL_VERSION: '20240116.0'
+      PROTOBUF_VERSION: '27.5'
+      DEPS_PREFIX: /home/runner/nsb-deps
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config \
+            libsqlite3-dev libyaml-cpp-dev libhiredis-dev python3
+
+      # Mirrors the Linux steps in the Get Started guide, installed into a
+      # cached prefix instead of /usr/local.
+      - name: Cache Abseil and Protobuf
+        id: deps-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DEPS_PREFIX }}
+          key: deps-${{ runner.os }}-absl-${{ env.ABSL_VERSION }}-protobuf-${{ env.PROTOBUF_VERSION }}
+
+      - name: Build Abseil and Protobuf
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        run: |
+          cd "$RUNNER_TEMP"
+          git clone --depth 1 --branch "$ABSL_VERSION" https://github.com/abseil/abseil-cpp.git
+          cmake -S abseil-cpp -B abseil-build \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DCMAKE_CXX_STANDARD=17 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DABSL_ENABLE_INSTALL=ON \
+            -DBUILD_TESTING=OFF \
+            -DCMAKE_INSTALL_PREFIX="$DEPS_PREFIX"
+          cmake --build abseil-build --parallel "$(nproc)"
+          cmake --install abseil-build
+
+          wget -q "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOBUF_VERSION}/protobuf-${PROTOBUF_VERSION}.tar.gz"
+          tar -xzf "protobuf-${PROTOBUF_VERSION}.tar.gz"
+          cmake -S "protobuf-${PROTOBUF_VERSION}" -B protobuf-build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -Dprotobuf_BUILD_SHARED_LIBS=ON \
+            -Dprotobuf_BUILD_TESTS=OFF \
+            -Dprotobuf_ABSL_PROVIDER=package \
+            -DCMAKE_CXX_STANDARD=17 \
+            -DCMAKE_PREFIX_PATH="$DEPS_PREFIX" \
+            -DCMAKE_INSTALL_PREFIX="$DEPS_PREFIX"
+          cmake --build protobuf-build --parallel "$(nproc)"
+          cmake --install protobuf-build
+
+      - name: Configure NSB
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_PREFIX_PATH="$DEPS_PREFIX" \
+            -DProtobuf_PROTOC_EXECUTABLE="$DEPS_PREFIX/bin/protoc"
+
+      - name: Build NSB
+        env:
+          LD_LIBRARY_PATH: ${{ env.DEPS_PREFIX }}/lib
+        run: cmake --build build --parallel "$(nproc)"
+
+      # Regression check for https://github.com/nsb-ucsc/nsb/issues/37
+      - name: Rebuild with --clean-first (twice)
+        env:
+          LD_LIBRARY_PATH: ${{ env.DEPS_PREFIX }}/lib
+        run: |
+          cmake --build build --clean-first --parallel "$(nproc)"
+          cmake --build build --clean-first --parallel "$(nproc)"
+
+      - name: Install NSB
+        run: cmake --install build --prefix "$RUNNER_TEMP/nsb-install"
+
+  macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install cmake pkg-config abseil protobuf yaml-cpp hiredis
+
+      - name: Configure NSB
+        run: cmake -S . -B build
+
+      - name: Build NSB
+        run: cmake --build build --parallel "$(sysctl -n hw.ncpu)"
+
+      # Regression check for https://github.com/nsb-ucsc/nsb/issues/37
+      - name: Rebuild with --clean-first (twice)
+        run: |
+          cmake --build build --clean-first --parallel "$(sysctl -n hw.ncpu)"
+          cmake --build build --clean-first --parallel "$(sysctl -n hw.ncpu)"
+
+      - name: Install NSB
+        run: cmake --install build --prefix "$RUNNER_TEMP/nsb-install"

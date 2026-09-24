@@ -104,13 +104,16 @@ the _CMake_ build:
 Within the output, you should see something like this:
 ```shell
 [cmake] -- Checking target libraries:
-[cmake] -- ✓ Found target: yaml-cpp::yaml-cpp
 [cmake] -- ✓ Found target: protobuf::libprotobuf
+[cmake] -- ✓ Found target: yaml-cpp::yaml-cpp
+[cmake] -- ✓ Found target: SQLite::SQLite3
 [cmake] -- ✓ Found target: absl::base
 [cmake] -- ✓ Found target: absl::log
-[cmake] -- ✓ Found target: absl::time
-[cmake] -- ✓ Found target: absl::log_internal_check_op
 [cmake] -- ✓ Found target: absl::log_initialize
+[cmake] -- ✓ Found target: absl::log_internal_check_op
+[cmake] -- ✓ Found target: absl::raw_logging_internal
+[cmake] -- ✓ Found target: absl::strings
+[cmake] -- ✓ Found target: absl::time
 [cmake] -- ✓ Found target: PkgConfig::hiredis
 ```
 If all the prerequisite software was installed, you may continue with building 
@@ -143,7 +146,9 @@ _Coming soon._
 
 #### Linux
 
-_Check the [Linux-specific instructions](linux-setup-guide.md)._
+The same `CMakeLists.txt` is used on Linux. See the Linux tab of the
+[Get Started guide](https://nsb-ucsc.github.io/nsb/get-started) for installing
+the prerequisites (including building Protobuf from source).
 
 ## Basic Usage
 
