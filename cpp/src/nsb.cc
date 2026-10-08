@@ -141,11 +141,11 @@ namespace nsb {
                 return std::string();
             } else {
                 // Read buffer until there's nothing left.
-                int bytesRead = recv(*fdPtr, buffer, RECEIVE_BUFFER_SIZE-1, 0);
+                int bytesRead = recv(*fdPtr, buffer, RECEIVE_BUFFER_SIZE-1, MSG_DONTWAIT);
                 while (bytesRead > 0) {
                     messageExists = true;
                     message.append(buffer, bytesRead);
-                    bytesRead = recv(*fdPtr, buffer, RECEIVE_BUFFER_SIZE-1, 0);
+                    bytesRead = recv(*fdPtr, buffer, RECEIVE_BUFFER_SIZE-1, MSG_DONTWAIT);
                 }
                 if (messageExists) {
                     return message;
