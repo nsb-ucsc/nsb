@@ -127,12 +127,12 @@ namespace nsb {
                         char buffer[MAX_BUFFER_SIZE];
                         std::vector<char> message;
                         // Read buffer until there's nothing left.
-                        int bytes_read = recv(fd, buffer, sizeof(buffer)-1, 0);
+                        int bytes_read = recv(fd, buffer, sizeof(buffer)-1, MSG_DONTWAIT);
                         while(bytes_read > 0) {
                             message_exists = true;
                             DLOG(INFO) << "Picked up " << bytes_read << "B from FD " << fd << "." << std::endl;
                             message.insert(message.end(), buffer, buffer+bytes_read);
-                            bytes_read = recv(fd, buffer, sizeof(buffer)-1, 0);
+                            bytes_read = recv(fd, buffer, sizeof(buffer)-1, MSG_DONTWAIT);
                         }
                         if (message_exists) {
                             DLOG(INFO) << "Received message from FD " << fd << ": " << 
