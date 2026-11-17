@@ -64,6 +64,7 @@ The following software packages are required to be installed:
 * **Protobuf**, used to define and compile
 * **YAML parsing**, to parse configuration files
 * **hiredis**, to connect to the Redis server
+* **SQLite3 development headers**, (libsqlite3-dev on Linux)
 
 Python API support involves additional package installation through its
 [_requirements.txt_](python/requirements.txt) file and is detailed in the 
